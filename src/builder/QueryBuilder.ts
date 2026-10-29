@@ -17,7 +17,7 @@ class QueryBuilder<T> {
           (field) =>
             ({
               [field]: { $regex: search, $options: 'i' },
-            } as FilterQuery<T>),
+            }) as FilterQuery<T>,
         ),
       });
     }
@@ -26,17 +26,47 @@ class QueryBuilder<T> {
 
   filter() {
     const queryObj = { ...this.query };
-    const excludeFields = ['search', 'searchTerm', 'sort', 'limit', 'page', 'fields'];
+    const excludeFields = [
+      'search',
+      'searchTerm',
+      'sort',
+      'limit',
+      'page',
+      'fields',
+      'startDate',
+      'endDate',
+    ];
 
     excludeFields.forEach((el) => delete queryObj[el]);
 
+    // Handle date range filtering on createdAt
+    if (this?.query?.startDate || this?.query?.endDate) {
+      const createdAtFilter: Record<string, Date> = {};
+      if (this.query.startDate) {
+        createdAtFilter.$gte = new Date(this.query.startDate as string);
+      }
+      if (this.query.endDate) {
+        const end = new Date(this.query.endDate as string);
+        end.setHours(23, 59, 59, 999);
+        createdAtFilter.$lte = end;
+      }
+      this.modelQuery = this.modelQuery.find({
+        createdAt: createdAtFilter,
+      } as FilterQuery<T>);
+    }
+
+    // Clean empty or null query values
     Object.keys(queryObj).forEach((key) => {
       if (queryObj[key] === '' || queryObj[key] == null) {
         delete queryObj[key];
       }
     });
 
-    this.modelQuery = this.modelQuery.find(queryObj as FilterQuery<T>);
+    // Support advanced query operators (gte, gt, lte, lt)
+    let queryStr = JSON.stringify(queryObj);
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+
+    this.modelQuery = this.modelQuery.find(JSON.parse(queryStr) as FilterQuery<T>);
     return this;
   }
 
@@ -47,8 +77,8 @@ class QueryBuilder<T> {
   }
 
   paginate() {
-    const page = Number(this?.query?.page) || 1;
-    const limit = Number(this?.query?.limit) || 10;
+    const page = Math.max(1, Number(this?.query?.page) || 1);
+    const limit = Math.max(1, Number(this?.query?.limit) || 10);
     const skip = (page - 1) * limit;
 
     this.modelQuery = this.modelQuery.skip(skip).limit(limit);
@@ -64,9 +94,9 @@ class QueryBuilder<T> {
   async countTotal() {
     const totalQueries = this.modelQuery.getFilter();
     const total = await this.modelQuery.model.countDocuments(totalQueries);
-    const page = Number(this?.query?.page) || 1;
-    const limit = Number(this?.query?.limit) || 10;
-    const totalPage = Math.ceil(total / limit);
+    const page = Math.max(1, Number(this?.query?.page) || 1);
+    const limit = Math.max(1, Number(this?.query?.limit) || 10);
+    const totalPage = Math.ceil(total / limit) || 1;
 
     return {
       page,
