@@ -21,6 +21,13 @@ describe('App Endpoints', () => {
     const res = await request(app).get('/docs');
     expect(res.status).toBe(200);
     expect(res.text).toContain('<redoc');
+    expect(res.text).toContain('redoc.standalone.js');
+  });
+
+  it('GET /docs/ - should also serve Redocly documentation HTML', async () => {
+    const res = await request(app).get('/docs/');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('<redoc');
   });
 
   it('GET /docs/swagger.json - should return OpenAPI spec', async () => {

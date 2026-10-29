@@ -7,6 +7,12 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(5001),
+  ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .default(
+      'http://localhost:3000,http://localhost:5173,https://doctor-tracker-frontend-alpha.vercel.app',
+    ),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   // REDIS_HOST: z.string().default('127.0.0.1'),
   // REDIS_PORT: z.coerce.number().default(6379),

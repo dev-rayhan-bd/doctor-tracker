@@ -1,5 +1,4 @@
-import express, { Application, Request, Response, RequestHandler } from 'express';
-import helmet from 'helmet';
+import express, { Application, Request, Response, NextFunction, RequestHandler } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import fs from 'fs';
 import path from 'path';
@@ -87,21 +86,48 @@ app.get('/health', (_req: Request, res: Response) => {
 /**
  * 8. API Documentation (Redocly & Swagger)
  */
-const file = fs.readFileSync(path.resolve(__dirname, './swagger.yaml'), 'utf8');
-const swaggerDocument = YAML.parse(file);
+const getSwaggerDocument = () => {
+  const possiblePaths = [
+    path.resolve(__dirname, './swagger.yaml'),
+    path.resolve(__dirname, '../src/swagger.yaml'),
+    path.resolve(process.cwd(), 'src/swagger.yaml'),
+    path.resolve(process.cwd(), 'dist/swagger.yaml'),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        return YAML.parse(fs.readFileSync(p, 'utf8'));
+      } catch {
+        // continue
+      }
+    }
+  }
+  return {
+    openapi: '3.0.0',
+    info: { title: 'Doctor Tracker Portal API', version: '1.0.0' },
+    paths: {},
+  };
+};
+
+const swaggerDocument = getSwaggerDocument();
 
 // Serve raw OpenAPI JSON specification for Redocly and external tools
-app.get('/docs/swagger.json', (_req: Request, res: Response) => {
+const serveSwaggerJson = (_req: Request, res: Response) => {
+  res.removeHeader('Content-Security-Policy');
   res.json(swaggerDocument);
-});
+};
 
-// Serve Modern Redocly Interactive Documentation at /docs & /redoc
-app.get(
-  '/docs',
-  helmet({ contentSecurityPolicy: false }) as unknown as RequestHandler,
-  (_req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'text/html');
-    res.send(`<!DOCTYPE html>
+app.get('/docs/swagger.json', serveSwaggerJson);
+app.get('/swagger.json', serveSwaggerJson);
+
+// Modern Interactive Redocly HTML Handler (handles /docs, /docs/, /redoc, /redoc/)
+const renderRedocDocs = (_req: Request, res: Response) => {
+  res.removeHeader('Content-Security-Policy');
+  res.removeHeader('Cross-Origin-Opener-Policy');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+
+  res.send(`<!DOCTYPE html>
 <html>
   <head>
     <title>Doctor Tracker - Redocly API Documentation</title>
@@ -115,24 +141,57 @@ app.get(
         padding: 0;
         font-family: 'Roboto', sans-serif;
       }
+      #nav-banner {
+        background-color: #0f172a;
+        color: #f8fafc;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+        position: sticky;
+        top: 0;
+        z-index: 9999;
+      }
+      #nav-banner a {
+        color: #38bdf8;
+        text-decoration: none;
+        font-weight: 600;
+        margin-left: 15px;
+      }
+      #nav-banner a:hover {
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
-    <redoc spec-url="/docs/swagger.json" theme='{"colors":{"primary":{"main":"#2563eb"}}}'></redoc>
-    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+    <div id="nav-banner">
+      <div>🩺 <strong>Doctor Tracker Portal API</strong> &bull; Interactive Redocly Documentation</div>
+      <div>
+        <a href="/api/docs">Switch to Swagger UI &rarr;</a>
+        <a href="/docs/swagger.json" target="_blank">OpenAPI JSON &rarr;</a>
+      </div>
+    </div>
+
+    <redoc spec-url="/docs/swagger.json"></redoc>
+
+    <script src="https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js"></script>
   </body>
 </html>`);
-  },
-);
+};
 
-app.get('/redoc', (_req: Request, res: Response) => {
-  res.redirect('/docs');
-});
+app.get('/docs', renderRedocDocs);
+app.get('/docs/', renderRedocDocs);
+app.get('/redoc', renderRedocDocs);
+app.get('/redoc/', renderRedocDocs);
 
-// Swagger UI Explorer
+// Swagger UI Explorer (handles /api/docs, /api/docs/)
 app.use(
   '/api/docs',
-  helmet({ contentSecurityPolicy: false }) as unknown as RequestHandler,
+  ((_req: Request, res: Response, next: NextFunction) => {
+    res.removeHeader('Content-Security-Policy');
+    next();
+  }) as unknown as RequestHandler,
   ...(swaggerUi.serve as unknown as RequestHandler[]),
   swaggerUi.setup(swaggerDocument) as unknown as RequestHandler,
 );

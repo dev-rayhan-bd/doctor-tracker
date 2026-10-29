@@ -4,9 +4,9 @@
   "description": "Backend API for K10 Football Academy Platform",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/server.ts",
-    "build": "tsc && tsc-alias",
-    "start": "node dist/server.js",
+    "dev": "node init && ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/server.ts",
+    "build": "node init && tsc && tsc-alias && node -e \"require('fs').copyFileSync('src/swagger.yaml', 'dist/swagger.yaml')\"",
+    "start": "node init && node dist/server.js",
     "seed": "node -r tsconfig-paths/register -r ts-node/register src/db/seed.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
