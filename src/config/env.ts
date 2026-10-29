@@ -31,6 +31,9 @@ const envSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEYS: z.string().optional(),
   CLOUDINARY_SECRET_KEYS: z.string().optional(),
+  ADMIN_NAME: z.string().default('System Admin'),
+  ADMIN_EMAIL: z.string().email().default('admin@doctortracker.com'),
+  ADMIN_PASSWORD: z.string().min(6).default('Admin@123456'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
