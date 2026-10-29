@@ -6,10 +6,17 @@ export class UserRepository {
     return UserModel.create(userData);
   }
 
-  async findByEmail(email: string, includePassword = false): Promise<IUserDocument | null> {
+  async findByEmail(
+    email: string,
+    includePassword = false,
+    includeOtp = false,
+  ): Promise<IUserDocument | null> {
     const query = UserModel.findOne({ email });
-    if (includePassword) {
-      query.select('+password');
+    const selectFields: string[] = [];
+    if (includePassword) selectFields.push('+password');
+    if (includeOtp) selectFields.push('+otp', '+otpExpiresAt');
+    if (selectFields.length > 0) {
+      query.select(selectFields.join(' '));
     }
     return query.exec();
   }

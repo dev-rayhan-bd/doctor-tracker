@@ -1,4 +1,4 @@
-import express, { Application, Request, Response } from 'express';
+import express, { Application, Request, Response, RequestHandler } from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import fs from 'fs';
@@ -35,7 +35,7 @@ app.use(helmetSecurity);
 app.use(corsSecurity);
 
 /**
- * 3. Global Rate Limiter (Redis-backed)
+ * 3. Global Rate Limiter (In-Memory Store; Redis store commented out in rateLimit.config.ts)
  */
 app.use(globalRateLimiter);
 
@@ -48,8 +48,8 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 /**
  * 5. Data Sanitization & Parameter Pollution Protection
  */
-app.use(mongoSanitizer as unknown as express.RequestHandler);
-app.use(hppProtection as unknown as express.RequestHandler);
+app.use(mongoSanitizer as unknown as RequestHandler);
+app.use(hppProtection as unknown as RequestHandler);
 
 /**
  * 6. Request Logging
@@ -92,9 +92,9 @@ const file = fs.readFileSync(path.resolve(__dirname, './swagger.yaml'), 'utf8');
 const swaggerDocument = YAML.parse(file);
 app.use(
   '/api/docs',
-  helmet({ contentSecurityPolicy: false }) as any,
-  swaggerUi.serve as any,
-  swaggerUi.setup(swaggerDocument) as any,
+  helmet({ contentSecurityPolicy: false }) as unknown as RequestHandler,
+  ...(swaggerUi.serve as unknown as RequestHandler[]),
+  swaggerUi.setup(swaggerDocument) as unknown as RequestHandler,
 );
 
 /**
@@ -103,12 +103,12 @@ app.use(
 app.use('/api/v1', applicationRoutes);
 
 /**
- * 9. 404 Not Found Middleware
+ * 10. 404 Not Found Middleware
  */
 app.use(notFound);
 
 /**
- * 10. Centralized Global Error Handler Middleware
+ * 11. Centralized Global Error Handler Middleware
  */
 app.use(globalErrorHandler);
 

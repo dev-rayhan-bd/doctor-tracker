@@ -2,7 +2,7 @@ import { Server } from 'http';
 import app from './app';
 import { env } from '@/config/env';
 import { connectDB, disconnectDB } from '@/config/db';
-import { initBackgroundJobs } from '@/jobs';
+// import { initBackgroundJobs } from '@/jobs';
 import { logger } from '@/utils/logger';
 
 let server: Server;
@@ -12,12 +12,14 @@ async function bootstrap() {
     // 1. Connect to Database
     await connectDB();
 
-    // 2. Initialize BullMQ Background Workers
-    initBackgroundJobs();
+    // 2. Initialize BullMQ Background Workers (Disabled - Redis/BullMQ not in use)
+    // initBackgroundJobs();
 
     // 3. Start HTTP Server
     server = app.listen(env.PORT, () => {
-      logger.info(`⚽ K10 Football Academy Server running in ${env.NODE_ENV} mode on port ${env.PORT}`);
+      logger.info(
+        `⚽ K10 Football Academy Server running in ${env.NODE_ENV} mode on port ${env.PORT}`,
+      );
     });
 
     /**

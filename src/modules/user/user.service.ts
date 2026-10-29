@@ -4,9 +4,10 @@ import { IUser, IUserDocument, ILoginResponse } from './user.interface';
 import { userRepository, UserRepository } from './user.repository';
 import { AppError } from '@/utils/AppError';
 import { env } from '@/config/env';
-import { emailQueue } from '@/jobs/queues/email.queue';
-import { redisClient } from '@/config/redis';
+// import { emailQueue } from '@/jobs/queues/email.queue';
+// import { redisClient } from '@/config/redis';
 import { otpGenerator } from '@/utils/otpGenerator';
+import { sendEmail } from '@/utils/sendEmail';
 
 export class UserService {
   constructor(private readonly userRepo: UserRepository) {}
@@ -17,19 +18,30 @@ export class UserService {
       throw new AppError(StatusCodes.CONFLICT, 'Email address is already registered');
     }
 
-    const newUser = await this.userRepo.create(userData);
-
-    // Generate 6-digit OTP
+    // Generate 6-digit OTP and 5-minute expiration
     const otp = otpGenerator.generate(6);
+    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    // Save OTP to Redis with a 5-minute expiration (300 seconds)
-    await redisClient.set(`OTP_${newUser.email}`, otp, 'EX', 300);
+    const newUser = await this.userRepo.create({
+      ...userData,
+      otp,
+      otpExpiresAt,
+    });
 
-    // Queue OTP email via BullMQ
-    await emailQueue.add('send-otp-email', {
+    // Save OTP to Redis with a 5-minute expiration (300 seconds) [Disabled - Using MongoDB OTP fields]
+    // await redisClient.set(`OTP_${newUser.email}`, otp, 'EX', 300);
+
+    // Queue OTP email via BullMQ [Disabled - Sending email directly via Nodemailer utility]
+    // await emailQueue.add('send-otp-email', {
+    //   to: newUser.email,
+    //   subject: 'Verify your K10 Football Academy Account',
+    //   body: `Hello ${newUser.name},<br><br>Your verification code is: <b>${otp}</b>.<br>This code will expire in 5 minutes.`,
+    // });
+
+    await sendEmail({
       to: newUser.email,
       subject: 'Verify your K10 Football Academy Account',
-      body: `Hello ${newUser.name},<br><br>Your verification code is: <b>${otp}</b>.<br>This code will expire in 5 minutes.`,
+      html: `Hello ${newUser.name},<br><br>Your verification code is: <b>${otp}</b>.<br>This code will expire in 5 minutes.`,
     });
 
     return newUser;
@@ -64,7 +76,7 @@ export class UserService {
       { expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
     );
 
-    const userObj = user.toObject() as unknown as IUser;
+    const userObj = user.toJSON() as unknown as IUser;
 
     return {
       user: userObj,
@@ -74,8 +86,8 @@ export class UserService {
   }
 
   async verifyOtp(email: string, otp: string): Promise<boolean> {
-    // 1. Find user
-    const user = await this.userRepo.findByEmail(email);
+    // 1. Find user (including OTP fields from DB)
+    const user = await this.userRepo.findByEmail(email, false, true);
     if (!user) {
       throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
     }
@@ -84,22 +96,33 @@ export class UserService {
       throw new AppError(StatusCodes.BAD_REQUEST, 'Email is already verified');
     }
 
-    // 2. Get OTP from Redis
-    const cachedOtp = await redisClient.get(`OTP_${email}`);
-    if (!cachedOtp) {
+    // 2. Get OTP from Redis [Disabled - Using MongoDB OTP fields]
+    // const cachedOtp = await redisClient.get(`OTP_${email}`);
+    // if (!cachedOtp) {
+    //   throw new AppError(StatusCodes.BAD_REQUEST, 'OTP has expired or does not exist');
+    // }
+
+    if (!user.otp || !user.otpExpiresAt || user.otpExpiresAt < new Date()) {
       throw new AppError(StatusCodes.BAD_REQUEST, 'OTP has expired or does not exist');
     }
 
     // 3. Compare OTP
-    if (cachedOtp !== otp) {
+    // if (cachedOtp !== otp) {
+    //   throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid OTP code');
+    // }
+    if (user.otp !== otp) {
       throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid OTP code');
     }
 
-    // 4. Update user status in DB
-    await this.userRepo.updateById(user._id.toString(), { isEmailVerified: true });
+    // 4. Update user status in DB and clear OTP fields
+    await this.userRepo.updateById(user._id.toString(), {
+      isEmailVerified: true,
+      otp: null,
+      otpExpiresAt: null,
+    });
 
-    // 5. Delete OTP from Redis
-    await redisClient.del(`OTP_${email}`);
+    // 5. Delete OTP from Redis [Disabled]
+    // await redisClient.del(`OTP_${email}`);
 
     return true;
   }

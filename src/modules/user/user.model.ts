@@ -37,16 +37,28 @@ const userSchema = new Schema<IUserDocument>(
       type: Boolean,
       default: false,
     },
+    otp: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    otpExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true,
     toJSON: {
       transform: (_doc, ret) => {
         delete ret.password;
+        delete ret.otp;
+        delete ret.otpExpiresAt;
         return ret;
       },
     },
-  }
+  },
 );
 
 // Hash password before saving

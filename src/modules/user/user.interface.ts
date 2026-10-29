@@ -10,6 +10,8 @@ export interface IUser {
   role: UserRole;
   status: UserStatus;
   isEmailVerified: boolean;
+  otp?: string | null;
+  otpExpiresAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

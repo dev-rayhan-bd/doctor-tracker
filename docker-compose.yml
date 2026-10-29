@@ -14,12 +14,12 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=mongodb://mongodb:27017/k10_football
-      - REDIS_HOST=redis
+      # - REDIS_HOST=redis
     depends_on:
       mongodb:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      # redis:
+      #   condition: service_healthy
     networks:
       - k10_network
 
@@ -39,21 +39,21 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: k10_football_redis
-    restart: always
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - k10_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: k10_football_redis
+  #   restart: always
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - k10_network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
 networks:
   k10_network:
@@ -61,4 +61,4 @@ networks:
 
 volumes:
   mongodb_data:
-  redis_data:
+  # redis_data:
