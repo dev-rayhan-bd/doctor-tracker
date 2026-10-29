@@ -63,7 +63,7 @@ app.get('/', (_req: Request, res: Response) => {
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
-    message: 'Welcome to K10 Football Academy Platform API',
+    message: 'Welcome to Doctor Tracking Platform API',
     data: {
       version: '1.0.0',
       health: '/health',
