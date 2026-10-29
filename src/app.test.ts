@@ -6,15 +6,28 @@ describe('App Endpoints', () => {
     const res = await request(app).get('/');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.message).toBe('Welcome to K10 Football Academy Platform API');
+    expect(res.body.message).toBe('Welcome to Doctor Tracker Platform API');
   });
 
   it('GET /health - should return 200 and health status', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.message).toBe('K10 Football Academy Platform API is healthy');
+    expect(res.body.message).toBe('Doctor Tracker Platform API is healthy');
     expect(res.body.data).toHaveProperty('uptime');
+  });
+
+  it('GET /docs - should serve Redocly documentation HTML', async () => {
+    const res = await request(app).get('/docs');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('<redoc');
+  });
+
+  it('GET /docs/swagger.json - should return OpenAPI spec', async () => {
+    const res = await request(app).get('/docs/swagger.json');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('openapi');
+    expect(res.body.info.title).toBe('Doctor Tracker Portal API');
   });
 
   it('GET /api/v1/invalid-route - should return 404', async () => {

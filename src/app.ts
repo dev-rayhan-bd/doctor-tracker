@@ -63,7 +63,7 @@ app.get('/', (_req: Request, res: Response) => {
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
-    message: 'Welcome to Doctor Tracking Platform API',
+    message: 'Welcome to Doctor Tracker Platform API',
     data: {
       version: '1.0.0',
       health: '/health',
@@ -76,7 +76,7 @@ app.get('/health', (_req: Request, res: Response) => {
   sendResponse(res, {
     statusCode: StatusCodes.OK,
     success: true,
-    message: 'K10 Football Academy Platform API is healthy',
+    message: 'Doctor Tracker Platform API is healthy',
     data: {
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
@@ -85,11 +85,51 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 /**
- * 8. API Documentation (Swagger)
- * Helmet CSP is disabled for this route because Swagger UI requires inline scripts/styles.
+ * 8. API Documentation (Redocly & Swagger)
  */
 const file = fs.readFileSync(path.resolve(__dirname, './swagger.yaml'), 'utf8');
 const swaggerDocument = YAML.parse(file);
+
+// Serve raw OpenAPI JSON specification for Redocly and external tools
+app.get('/docs/swagger.json', (_req: Request, res: Response) => {
+  res.json(swaggerDocument);
+});
+
+// Serve Modern Redocly Interactive Documentation at /docs & /redoc
+app.get(
+  '/docs',
+  helmet({ contentSecurityPolicy: false }) as unknown as RequestHandler,
+  (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`<!DOCTYPE html>
+<html>
+  <head>
+    <title>Doctor Tracker - Redocly API Documentation</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png" />
+    <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700" rel="stylesheet" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Roboto', sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <redoc spec-url="/docs/swagger.json" theme='{"colors":{"primary":{"main":"#2563eb"}}}'></redoc>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+  </body>
+</html>`);
+  },
+);
+
+app.get('/redoc', (_req: Request, res: Response) => {
+  res.redirect('/docs');
+});
+
+// Swagger UI Explorer
 app.use(
   '/api/docs',
   helmet({ contentSecurityPolicy: false }) as unknown as RequestHandler,

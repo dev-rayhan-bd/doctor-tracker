@@ -1,13 +1,13 @@
 import { connectDB, disconnectDB } from '@/config/db';
-import { seedAdmin } from './seedAdmin';
+import { seedAllData } from './seedAll';
 import { logger } from '@/utils/logger';
 
 async function runSeed() {
   try {
     await connectDB();
-    await seedAdmin();
+    await seedAllData();
     await disconnectDB();
-    logger.info('🚀 Seeding script completed.');
+    logger.info('🚀 Seeding script completed successfully.');
     process.exit(0);
   } catch (error) {
     logger.error({ err: error }, '❌ Seeding script failed');

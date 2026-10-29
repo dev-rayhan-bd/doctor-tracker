@@ -1,23 +1,835 @@
 openapi: 3.0.0
 info:
-  title: K10 Football Academy Platform API
+  title: Doctor Tracker Portal API
   version: 1.0.0
-  description: API documentation for the K10 Football Academy Platform Backend
+  description: |
+    Enterprise-level RESTful API backend for the Doctor Tracker administrative portal.
+    Features comprehensive Doctor Management, Patient Records, Real-time Aggregation Analytics, and Multi-layer Security.
 servers:
-  - url: http://localhost:5000
-    description: Development server
+  - url: http://localhost:5001
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your Bearer JWT token in the format **Bearer <token>**
+
+security:
+  - BearerAuth: []
+
 paths:
   /:
     get:
-      summary: API Root
-      description: Returns a welcome message and API base path
+      summary: API Root / Welcome
+      tags: [System]
+      security: []
       responses:
         '200':
-          description: Welcome message
+          description: Welcome message with service status
+
   /health:
     get:
       summary: Health Check
-      description: Returns the health status of the API
+      tags: [System]
+      security: []
       responses:
         '200':
-          description: Health status with uptime
+          description: Server uptime and health status
+
+  # ============================================================
+  # Authentication & Authorization Endpoints
+  # ============================================================
+  /api/v1/users/register:
+    post:
+      summary: Register a new user
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: Dr. Sarah Ahmed
+                email:
+                  type: string
+                  format: email
+                  example: sarah@example.com
+                password:
+                  type: string
+                  minLength: 6
+                  example: Password@123
+      responses:
+        '201':
+          description: User registered successfully. OTP sent to email.
+        '409':
+          description: Email already registered
+
+  /api/v1/users/login:
+    post:
+      summary: Login user
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@doctortracker.com
+                password:
+                  type: string
+                  example: Admin@123456
+      responses:
+        '200':
+          description: Login successful. Returns Access & Refresh tokens.
+        '401':
+          description: Invalid email or password
+        '403':
+          description: Account blocked or email unverified
+
+  /api/v1/users/verify-otp:
+    post:
+      summary: Verify account registration OTP
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: sarah@example.com
+                otp:
+                  type: string
+                  minLength: 6
+                  maxLength: 6
+                  example: "123456"
+      responses:
+        '200':
+          description: Email verified successfully
+
+  /api/v1/users/resend-otp:
+    post:
+      summary: Resend account verification OTP
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: sarah@example.com
+      responses:
+        '200':
+          description: New OTP sent to email
+
+  /api/v1/users/refresh-token:
+    post:
+      summary: Refresh Access Token
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: New Access and Refresh tokens generated
+
+  /api/v1/users/forgot-password:
+    post:
+      summary: Request password reset OTP
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@doctortracker.com
+      responses:
+        '200':
+          description: Password reset OTP sent to registered email
+
+  /api/v1/users/verify-forgot-password-otp:
+    post:
+      summary: Verify password reset OTP
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@doctortracker.com
+                otp:
+                  type: string
+                  example: "654321"
+      responses:
+        '200':
+          description: OTP verified. Returns single-use 15-minute reset token.
+
+  /api/v1/users/reset-password:
+    post:
+      summary: Reset password with resetToken or OTP
+      tags: [Authentication]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, newPassword, confirmPassword]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@doctortracker.com
+                newPassword:
+                  type: string
+                  minLength: 6
+                  example: BrandNewPassword@123
+                confirmPassword:
+                  type: string
+                  minLength: 6
+                  example: BrandNewPassword@123
+                token:
+                  type: string
+                  description: Reset token received from verify-forgot-password-otp
+                otp:
+                  type: string
+                  description: Direct 6-digit OTP code (alternative)
+      responses:
+        '200':
+          description: Password reset successfully
+
+  /api/v1/users/change-password:
+    post:
+      summary: Change password (Authenticated)
+      tags: [Authentication]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [oldPassword, newPassword, confirmPassword]
+              properties:
+                oldPassword:
+                  type: string
+                  example: Admin@123456
+                newPassword:
+                  type: string
+                  minLength: 6
+                  example: Admin@NewPassword!
+                confirmPassword:
+                  type: string
+                  minLength: 6
+                  example: Admin@NewPassword!
+      responses:
+        '200':
+          description: Password changed successfully
+
+  /api/v1/users/me:
+    get:
+      summary: Get logged-in user profile
+      tags: [Authentication]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile details
+
+  # ============================================================
+  # Doctor Management Endpoints
+  # ============================================================
+  /api/v1/doctors:
+    post:
+      summary: Create a new doctor
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, specialization, hospital, phone, email]
+              properties:
+                name:
+                  type: string
+                  example: Dr. Farhan Rahman
+                specialization:
+                  type: string
+                  example: Cardiology
+                hospital:
+                  type: string
+                  example: Evercare Hospital
+                phone:
+                  type: string
+                  example: "+8801711001122"
+                email:
+                  type: string
+                  format: email
+                  example: dr.farhan@evercare.org
+                status:
+                  type: string
+                  enum: [ACTIVE, INACTIVE]
+                  default: ACTIVE
+      responses:
+        '201':
+          description: Doctor created successfully
+
+    get:
+      summary: List all doctors (Search, Filter, Paginate)
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Case-insensitive search across name, specialization, hospital, phone, email
+        - in: query
+          name: specialization
+          schema:
+            type: string
+          description: Filter by exact specialization
+        - in: query
+          name: hospital
+          schema:
+            type: string
+          description: Filter by hospital name
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+          description: Filter created on or after date (YYYY-MM-DD)
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+          description: Filter created on or before date (YYYY-MM-DD)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: -createdAt
+      responses:
+        '200':
+          description: List of doctors with pagination metadata
+
+  /api/v1/doctors/{id}:
+    get:
+      summary: Get doctor by ID with patient count
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Doctor details and assigned patient count
+        '404':
+          description: Doctor not found
+
+    patch:
+      summary: Update doctor details
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                specialization:
+                  type: string
+                hospital:
+                  type: string
+                phone:
+                  type: string
+                email:
+                  type: string
+                status:
+                  type: string
+                  enum: [ACTIVE, INACTIVE]
+      responses:
+        '200':
+          description: Doctor updated successfully
+
+    delete:
+      summary: Delete doctor and associated patients
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Doctor deleted successfully
+
+  /api/v1/doctors/{id}/patients:
+    get:
+      summary: List all patients under a specific doctor
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: condition
+          schema:
+            type: string
+            enum: [Critical, Stable, Recovered, Under Observation, Serious]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Doctor patient list with pagination meta
+
+    post:
+      summary: Add a new patient under a specific doctor
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, age, gender, phone]
+              properties:
+                name:
+                  type: string
+                  example: Rahim Sheikh
+                age:
+                  type: integer
+                  example: 58
+                gender:
+                  type: string
+                  enum: [MALE, FEMALE, OTHER]
+                  example: MALE
+                phone:
+                  type: string
+                  example: "+8801720011221"
+                email:
+                  type: string
+                  example: rahim.sheikh@example.com
+                condition:
+                  type: string
+                  enum: [Critical, Stable, Recovered, Under Observation, Serious]
+                  default: Stable
+                diagnosis:
+                  type: string
+                  example: Acute Coronary Syndrome
+                admissionDate:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Patient created under doctor successfully
+
+  /api/v1/doctors/{doctorId}/patients/{patientId}:
+    delete:
+      summary: Remove patient from specific doctor list
+      tags: [Doctors]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: doctorId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: patientId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient removed from doctor successfully
+
+  # ============================================================
+  # Patient Management Endpoints (Dedicated Patient Page)
+  # ============================================================
+  /api/v1/patients:
+    post:
+      summary: Register a new patient
+      tags: [Patients]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, age, gender, phone, doctor]
+              properties:
+                name:
+                  type: string
+                  example: Fatema Begum
+                age:
+                  type: integer
+                  example: 62
+                gender:
+                  type: string
+                  enum: [MALE, FEMALE, OTHER]
+                  example: FEMALE
+                phone:
+                  type: string
+                  example: "+8801821122332"
+                email:
+                  type: string
+                  example: fatema.begum@example.com
+                doctor:
+                  type: string
+                  description: 24-char ObjectId of assigned Doctor
+                  example: 6ae38a5790feeb9106906410
+                condition:
+                  type: string
+                  enum: [Critical, Stable, Recovered, Under Observation, Serious]
+                  default: Stable
+                diagnosis:
+                  type: string
+                  example: Congestive Heart Failure
+                admissionDate:
+                  type: string
+                  format: date-time
+                status:
+                  type: string
+                  enum: [ACTIVE, DISCHARGED]
+                  default: ACTIVE
+      responses:
+        '201':
+          description: Patient created successfully
+
+    get:
+      summary: List all patients (Search, Condition Filter, Date Range, Paginate)
+      tags: [Patients]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search by name, phone, email, condition, diagnosis
+        - in: query
+          name: condition
+          schema:
+            type: string
+            enum: [Critical, Stable, Recovered, Under Observation, Serious]
+        - in: query
+          name: doctor
+          schema:
+            type: string
+          description: Filter by doctor ObjectId
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date
+          description: Admission / registration start date
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date
+          description: Admission / registration end date
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: sort
+          schema:
+            type: string
+            default: -createdAt
+      responses:
+        '200':
+          description: Paginated patient list with populated doctor information
+
+  /api/v1/patients/{id}:
+    get:
+      summary: Get patient details by ID
+      tags: [Patients]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient record with doctor details
+        '404':
+          description: Patient not found
+
+    patch:
+      summary: Edit/Update patient information
+      tags: [Patients]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+                gender:
+                  type: string
+                  enum: [MALE, FEMALE, OTHER]
+                phone:
+                  type: string
+                email:
+                  type: string
+                doctor:
+                  type: string
+                condition:
+                  type: string
+                  enum: [Critical, Stable, Recovered, Under Observation, Serious]
+                diagnosis:
+                  type: string
+                status:
+                  type: string
+                  enum: [ACTIVE, DISCHARGED]
+      responses:
+        '200':
+          description: Patient updated successfully
+
+    delete:
+      summary: Delete patient record
+      tags: [Patients]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient deleted successfully
+
+  # ============================================================
+  # Dashboard & Data Visualization Analytics
+  # ============================================================
+  /api/v1/analytics/dashboard:
+    get:
+      summary: Admin Dashboard Analytics (KPIs, Charts & Aggregation Data)
+      tags: [Analytics]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Aggregation analytics data for visual charts and KPI cards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      kpi:
+                        type: object
+                        properties:
+                          totalDoctors:
+                            type: integer
+                            example: 11
+                          totalPatients:
+                            type: integer
+                            example: 28
+                          criticalPatients:
+                            type: integer
+                            example: 5
+                          stablePatients:
+                            type: integer
+                            example: 9
+                          recoveredPatients:
+                            type: integer
+                            example: 5
+                          seriousPatients:
+                            type: integer
+                            example: 4
+                          underObservationPatients:
+                            type: integer
+                            example: 5
+                      charts:
+                        type: object
+                        properties:
+                          patientsPerDoctor:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                doctorId:
+                                  type: string
+                                doctorName:
+                                  type: string
+                                specialization:
+                                  type: string
+                                hospital:
+                                  type: string
+                                patientCount:
+                                  type: integer
+                          dateBasedStatistics:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                date:
+                                  type: string
+                                  example: "2026-10-25"
+                                patients:
+                                  type: integer
+                                doctors:
+                                  type: integer
+                          conditionDistribution:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                _id:
+                                  type: string
+                                count:
+                                  type: integer
+                          specializationDistribution:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                specialization:
+                                  type: string
+                                count:
+                                  type: integer

@@ -2,7 +2,7 @@ import { Server } from 'http';
 import app from './app';
 import { env } from '@/config/env';
 import { connectDB, disconnectDB } from '@/config/db';
-import { seedAdmin } from '@/db/seedAdmin';
+import { seedAllData } from '@/db/seedAll';
 // import { initBackgroundJobs } from '@/jobs';
 import { logger } from '@/utils/logger';
 
@@ -13,8 +13,8 @@ async function bootstrap() {
     // 1. Connect to Database
     await connectDB();
 
-    // 2. Seed Super Admin User from environment credentials
-    await seedAdmin();
+    // 2. Seed initial required system data (Admin, Doctors, Patients)
+    await seedAllData();
 
     // 3. Initialize BullMQ Background Workers (Disabled - Redis/BullMQ not in use)
     // initBackgroundJobs();
