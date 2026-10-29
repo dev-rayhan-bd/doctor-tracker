@@ -248,7 +248,6 @@ Doctor Tracker includes both **Redocly** and **Swagger UI** interactive document
 | **Backend GitHub Repository** | [https://github.com/dev-rayhan-bd/doctor-tracker.git](https://github.com/dev-rayhan-bd/doctor-tracker.git) |
 | **Live Backend API Base URL** | `https://doctor-tracker-9e9c.onrender.com/api/v1` *(Local: `http://localhost:5001/api/v1`)* |
 | **Live Redocly Documentation** | [https://doctor-tracker-9e9c.onrender.com/docs](https://doctor-tracker-9e9c.onrender.com/docs) *(Local: `http://localhost:5001/docs`)* |
-| **Live Swagger UI Explorer** | [https://doctor-tracker-9e9c.onrender.com/api/docs](https://doctor-tracker-9e9c.onrender.com/api/docs) *(Local: `http://localhost:5001/api/docs`)* |
 | **Super Admin Login Email** | `admin@doctortracker.com` |
 | **Super Admin Login Password** | `Admin@123456` |
 | **Production Database** | MongoDB Atlas (Cluster Database: `doctor_tracker`) |
