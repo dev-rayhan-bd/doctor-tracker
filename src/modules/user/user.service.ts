@@ -4,10 +4,15 @@ import { IUser, IUserDocument, ILoginResponse } from './user.interface';
 import { userRepository, UserRepository } from './user.repository';
 import { AppError } from '@/utils/AppError';
 import { env } from '@/config/env';
-// import { emailQueue } from '@/jobs/queues/email.queue';
-// import { redisClient } from '@/config/redis';
 import { otpGenerator } from '@/utils/otpGenerator';
 import { sendEmail } from '@/utils/sendEmail';
+
+export interface IResetPasswordPayload {
+  email: string;
+  newPassword: string;
+  token?: string;
+  otp?: string;
+}
 
 export class UserService {
   constructor(private readonly userRepo: UserRepository) {}
@@ -18,58 +23,141 @@ export class UserService {
       throw new AppError(StatusCodes.CONFLICT, 'Email address is already registered');
     }
 
-    // Generate 6-digit OTP and 5-minute expiration
+    // Generate 6-digit OTP with 10-minute validity
     const otp = otpGenerator.generate(6);
-    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     const newUser = await this.userRepo.create({
       ...userData,
+      isEmailVerified: false,
       otp,
       otpExpiresAt,
     });
 
-    // Save OTP to Redis with a 5-minute expiration (300 seconds) [Disabled - Using MongoDB OTP fields]
-    // await redisClient.set(`OTP_${newUser.email}`, otp, 'EX', 300);
-
-    // Queue OTP email via BullMQ [Disabled - Sending email directly via Nodemailer utility]
-    // await emailQueue.add('send-otp-email', {
-    //   to: newUser.email,
-    //   subject: 'Verify your K10 Football Academy Account',
-    //   body: `Hello ${newUser.name},<br><br>Your verification code is: <b>${otp}</b>.<br>This code will expire in 5 minutes.`,
-    // });
-
+    // Send verification email via direct Nodemailer utility
     await sendEmail({
       to: newUser.email,
-      subject: 'Verify your K10 Football Academy Account',
-      html: `Hello ${newUser.name},<br><br>Your verification code is: <b>${otp}</b>.<br>This code will expire in 5 minutes.`,
+      subject: 'Verify your Doctor Tracker Account',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #0f172a; text-align: center;">Welcome to Doctor Tracker</h2>
+          <p>Hello <b>${newUser.name}</b>,</p>
+          <p>Thank you for registering. Please use the following 6-digit OTP code to verify your account email address:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2563eb; background-color: #eff6ff; padding: 12px 24px; border-radius: 6px; display: inline-block;">
+              ${otp}
+            </span>
+          </div>
+          <p style="color: #64748b; font-size: 14px;">This code will expire in <b>10 minutes</b>. If you did not make this request, please ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <p style="color: #94a3b8; font-size: 12px; text-align: center;">Doctor Tracker Portal &copy; ${new Date().getFullYear()} All rights reserved.</p>
+        </div>
+      `,
     });
 
     return newUser;
   }
 
-  async loginUser(email: string, candidatePassword: string): Promise<ILoginResponse> {
-    const user = await this.userRepo.findByEmail(email, true);
+  async verifyOtp(email: string, otp: string): Promise<boolean> {
+    const user = await this.userRepo.findByEmail(email, { includeOtp: true });
     if (!user) {
-      throw new AppError(StatusCodes.UNAUTHORIZED, 'Invalid credentials');
+      throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
+    }
+
+    if (user.isEmailVerified) {
+      throw new AppError(StatusCodes.BAD_REQUEST, 'Email is already verified');
+    }
+
+    if (!user.otp || !user.otpExpiresAt || user.otpExpiresAt < new Date()) {
+      throw new AppError(
+        StatusCodes.BAD_REQUEST,
+        'OTP has expired or is invalid. Please request a new one.',
+      );
+    }
+
+    if (user.otp !== otp) {
+      throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid OTP code');
+    }
+
+    await this.userRepo.updateById(user._id.toString(), {
+      isEmailVerified: true,
+      otp: null,
+      otpExpiresAt: null,
+    });
+
+    return true;
+  }
+
+  async resendOtp(email: string): Promise<void> {
+    const user = await this.userRepo.findByEmail(email, { includeOtp: true });
+    if (!user) {
+      throw new AppError(StatusCodes.NOT_FOUND, 'User with this email was not found');
+    }
+
+    if (user.isEmailVerified) {
+      throw new AppError(StatusCodes.BAD_REQUEST, 'Email address is already verified');
+    }
+
+    const otp = otpGenerator.generate(6);
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.userRepo.updateById(user._id.toString(), {
+      otp,
+      otpExpiresAt,
+    });
+
+    await sendEmail({
+      to: user.email,
+      subject: 'Your New OTP Verification Code - Doctor Tracker',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #0f172a; text-align: center;">Doctor Tracker Verification</h2>
+          <p>Hello <b>${user.name}</b>,</p>
+          <p>You requested a new verification code. Please use the code below:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2563eb; background-color: #eff6ff; padding: 12px 24px; border-radius: 6px; display: inline-block;">
+              ${otp}
+            </span>
+          </div>
+          <p style="color: #64748b; font-size: 14px;">This code is valid for <b>10 minutes</b>.</p>
+        </div>
+      `,
+    });
+  }
+
+  async loginUser(email: string, candidatePassword: string): Promise<ILoginResponse> {
+    const user = await this.userRepo.findByEmail(email, { includePassword: true });
+    if (!user) {
+      throw new AppError(StatusCodes.UNAUTHORIZED, 'Invalid email or password');
     }
 
     const isMatch = await user.comparePassword(candidatePassword);
     if (!isMatch) {
-      throw new AppError(StatusCodes.UNAUTHORIZED, 'Invalid credentials');
+      throw new AppError(StatusCodes.UNAUTHORIZED, 'Invalid email or password');
     }
 
     if (user.status === 'BLOCKED' || user.status === 'INACTIVE') {
-      throw new AppError(StatusCodes.FORBIDDEN, `Account is ${user.status.toLowerCase()}`);
+      throw new AppError(
+        StatusCodes.FORBIDDEN,
+        `Your account is currently ${user.status.toLowerCase()}`,
+      );
     }
 
-    // Generate Access Token (Short-lived)
+    if (!user.isEmailVerified) {
+      throw new AppError(
+        StatusCodes.FORBIDDEN,
+        'Email is not verified. Please verify your email before logging in.',
+      );
+    }
+
+    // Generate Access Token
     const accessToken = jwt.sign(
       { userId: user._id.toString(), email: user.email, role: user.role },
       env.JWT_ACCESS_SECRET,
       { expiresIn: env.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
     );
 
-    // Generate Refresh Token (Long-lived)
+    // Generate Refresh Token
     const refreshToken = jwt.sign(
       { userId: user._id.toString(), email: user.email, role: user.role },
       env.JWT_REFRESH_SECRET,
@@ -85,46 +173,193 @@ export class UserService {
     };
   }
 
-  async verifyOtp(email: string, otp: string): Promise<boolean> {
-    // 1. Find user (including OTP fields from DB)
-    const user = await this.userRepo.findByEmail(email, false, true);
+  async refreshToken(token: string): Promise<{ accessToken: string; refreshToken: string }> {
+    try {
+      const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET) as {
+        userId: string;
+        email: string;
+        role: string;
+      };
+
+      const user = await this.userRepo.findById(decoded.userId);
+      if (!user) {
+        throw new AppError(StatusCodes.UNAUTHORIZED, 'User no longer exists');
+      }
+
+      if (user.status === 'BLOCKED' || user.status === 'INACTIVE') {
+        throw new AppError(StatusCodes.FORBIDDEN, `Account is ${user.status.toLowerCase()}`);
+      }
+
+      const newAccessToken = jwt.sign(
+        { userId: user._id.toString(), email: user.email, role: user.role },
+        env.JWT_ACCESS_SECRET,
+        { expiresIn: env.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
+      );
+
+      const newRefreshToken = jwt.sign(
+        { userId: user._id.toString(), email: user.email, role: user.role },
+        env.JWT_REFRESH_SECRET,
+        { expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
+      );
+
+      return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch {
+      throw new AppError(StatusCodes.UNAUTHORIZED, 'Invalid or expired refresh token');
+    }
+  }
+
+  async changePassword(userId: string, oldPass: string, newPass: string): Promise<void> {
+    const user = await this.userRepo.findById(userId, true);
     if (!user) {
       throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
     }
 
-    if (user.isEmailVerified) {
-      throw new AppError(StatusCodes.BAD_REQUEST, 'Email is already verified');
+    const isMatch = await user.comparePassword(oldPass);
+    if (!isMatch) {
+      throw new AppError(StatusCodes.BAD_REQUEST, 'Current password is incorrect');
     }
 
-    // 2. Get OTP from Redis [Disabled - Using MongoDB OTP fields]
-    // const cachedOtp = await redisClient.get(`OTP_${email}`);
-    // if (!cachedOtp) {
-    //   throw new AppError(StatusCodes.BAD_REQUEST, 'OTP has expired or does not exist');
-    // }
+    if (oldPass === newPass) {
+      throw new AppError(
+        StatusCodes.BAD_REQUEST,
+        'New password cannot be the same as the old password',
+      );
+    }
+
+    user.password = newPass;
+    await user.save();
+  }
+
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.userRepo.findByEmail(email);
+    if (!user) {
+      throw new AppError(StatusCodes.NOT_FOUND, 'User with this email was not found');
+    }
+
+    const otp = otpGenerator.generate(6);
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await this.userRepo.updateById(user._id.toString(), {
+      otp,
+      otpExpiresAt,
+    });
+
+    await sendEmail({
+      to: user.email,
+      subject: 'Password Reset OTP - Doctor Tracker',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h2 style="color: #dc2626; text-align: center;">Reset Your Password</h2>
+          <p>Hello <b>${user.name}</b>,</p>
+          <p>We received a request to reset your password. Use the verification code below to proceed:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #dc2626; background-color: #fef2f2; padding: 12px 24px; border-radius: 6px; display: inline-block;">
+              ${otp}
+            </span>
+          </div>
+          <p style="color: #64748b; font-size: 14px;">This code will expire in <b>10 minutes</b>. If you did not request a password reset, you can safely ignore this email.</p>
+        </div>
+      `,
+    });
+  }
+
+  async verifyForgotPasswordOtp(email: string, otp: string): Promise<{ resetToken: string }> {
+    const user = await this.userRepo.findByEmail(email, { includeOtp: true });
+    if (!user) {
+      throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
+    }
 
     if (!user.otp || !user.otpExpiresAt || user.otpExpiresAt < new Date()) {
-      throw new AppError(StatusCodes.BAD_REQUEST, 'OTP has expired or does not exist');
+      throw new AppError(
+        StatusCodes.BAD_REQUEST,
+        'OTP has expired or is invalid. Please request a new one.',
+      );
     }
 
-    // 3. Compare OTP
-    // if (cachedOtp !== otp) {
-    //   throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid OTP code');
-    // }
     if (user.otp !== otp) {
       throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid OTP code');
     }
 
-    // 4. Update user status in DB and clear OTP fields
+    // Generate single-use reset token valid for 15 minutes
+    const resetToken = jwt.sign(
+      { userId: user._id.toString(), email: user.email, type: 'PASSWORD_RESET' },
+      env.JWT_ACCESS_SECRET,
+      { expiresIn: '15m' },
+    );
+
+    const resetExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Save reset token and clear OTP
     await this.userRepo.updateById(user._id.toString(), {
-      isEmailVerified: true,
       otp: null,
       otpExpiresAt: null,
+      passwordResetToken: resetToken,
+      passwordResetExpiresAt: resetExpiresAt,
     });
 
-    // 5. Delete OTP from Redis [Disabled]
-    // await redisClient.del(`OTP_${email}`);
+    return { resetToken };
+  }
 
-    return true;
+  async resetPassword(payload: IResetPasswordPayload): Promise<void> {
+    const { email, newPassword, token, otp } = payload;
+
+    const user = await this.userRepo.findByEmail(email, {
+      includePassword: true,
+      includeOtp: true,
+      includeResetToken: true,
+    });
+
+    if (!user) {
+      throw new AppError(StatusCodes.NOT_FOUND, 'User not found');
+    }
+
+    let isAuthorized = false;
+
+    // Verify via resetToken
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as {
+          userId: string;
+          email: string;
+          type: string;
+        };
+
+        if (
+          decoded.type === 'PASSWORD_RESET' &&
+          decoded.email === email &&
+          user.passwordResetToken === token &&
+          user.passwordResetExpiresAt &&
+          user.passwordResetExpiresAt > new Date()
+        ) {
+          isAuthorized = true;
+        }
+      } catch {
+        throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid or expired password reset token');
+      }
+    }
+
+    // Verify via direct OTP
+    if (!isAuthorized && otp) {
+      if (user.otp === otp && user.otpExpiresAt && user.otpExpiresAt > new Date()) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      throw new AppError(StatusCodes.BAD_REQUEST, 'Invalid or expired reset token or OTP');
+    }
+
+    // Update password (pre('save') hashes it automatically)
+    user.password = newPassword;
+    user.otp = null;
+    user.otpExpiresAt = null;
+    user.passwordResetToken = null;
+    user.passwordResetExpiresAt = null;
+
+    await user.save();
   }
 
   async getUserById(id: string): Promise<IUserDocument> {

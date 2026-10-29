@@ -7,7 +7,9 @@ import { authRateLimiter, searchRateLimiter } from '@/config/rateLimit.config';
 
 const router = Router();
 
-// Public Authentication Routes (Protected with strict Auth Rate Limiter to prevent Brute-force attacks)
+// ==========================================
+// Public Authentication Routes (Strict Rate Limiting)
+// ==========================================
 router.post(
   '/register',
   authRateLimiter,
@@ -29,13 +31,57 @@ router.post(
   userController.verifyOtp,
 );
 
-// Protected User Profile
+router.post(
+  '/resend-otp',
+  authRateLimiter,
+  validateRequest(UserValidation.resendOtpZodSchema),
+  userController.resendOtp,
+);
+
+router.post(
+  '/refresh-token',
+  authRateLimiter,
+  validateRequest(UserValidation.refreshTokenZodSchema),
+  userController.refreshToken,
+);
+
+router.post(
+  '/forgot-password',
+  authRateLimiter,
+  validateRequest(UserValidation.forgotPasswordZodSchema),
+  userController.forgotPassword,
+);
+
+router.post(
+  '/verify-forgot-password-otp',
+  authRateLimiter,
+  validateRequest(UserValidation.verifyForgotPasswordOtpZodSchema),
+  userController.verifyForgotPasswordOtp,
+);
+
+router.post(
+  '/reset-password',
+  authRateLimiter,
+  validateRequest(UserValidation.resetPasswordZodSchema),
+  userController.resetPassword,
+);
+
+// ==========================================
+// Protected Routes (Authenticated User)
+// ==========================================
 router.get('/me', auth(), userController.getProfile);
 
-// Resource-Intensive Search/Query Route (Protected with Search Rate Limiter)
-router.get('/search', auth('ADMIN', 'SUPER_ADMIN'), searchRateLimiter, userController.getAll);
+router.post(
+  '/change-password',
+  auth(),
+  validateRequest(UserValidation.changePasswordZodSchema),
+  userController.changePassword,
+);
 
-// Admin / Super Admin routes
+// ==========================================
+// Admin / Management Routes
+// ==========================================
+router.get('/search', auth('ADMIN', 'SUPER_ADMIN'), searchRateLimiter, userController.getAll);
 router.get('/', auth('ADMIN', 'SUPER_ADMIN'), userController.getAll);
 router.get('/:id', auth('ADMIN', 'SUPER_ADMIN'), userController.getById);
 router.patch(

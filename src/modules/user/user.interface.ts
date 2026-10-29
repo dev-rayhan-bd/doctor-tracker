@@ -1,6 +1,8 @@
 import { Document } from 'mongoose';
 
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'PLAYER' | 'COACH' | 'GUARDIAN' | 'SCOUT';
+export type UserRole =
+  'SUPER_ADMIN' | 'ADMIN' | 'DOCTOR' | 'USER' | 'PLAYER' | 'COACH' | 'GUARDIAN' | 'SCOUT';
+
 export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
 
 export interface IUser {
@@ -12,6 +14,8 @@ export interface IUser {
   isEmailVerified: boolean;
   otp?: string | null;
   otpExpiresAt?: Date | null;
+  passwordResetToken?: string | null;
+  passwordResetExpiresAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

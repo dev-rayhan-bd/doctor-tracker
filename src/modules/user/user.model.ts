@@ -25,8 +25,8 @@ const userSchema = new Schema<IUserDocument>(
     },
     role: {
       type: String,
-      enum: ['SUPER_ADMIN', 'ADMIN', 'PLAYER', 'COACH', 'GUARDIAN', 'SCOUT'],
-      default: 'PLAYER',
+      enum: ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'USER', 'PLAYER', 'COACH', 'GUARDIAN', 'SCOUT'],
+      default: 'USER',
     },
     status: {
       type: String,
@@ -47,6 +47,16 @@ const userSchema = new Schema<IUserDocument>(
       default: null,
       select: false,
     },
+    passwordResetToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    passwordResetExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true,
@@ -55,6 +65,8 @@ const userSchema = new Schema<IUserDocument>(
         delete ret.password;
         delete ret.otp;
         delete ret.otpExpiresAt;
+        delete ret.passwordResetToken;
+        delete ret.passwordResetExpiresAt;
         return ret;
       },
     },
